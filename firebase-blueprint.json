@@ -1,0 +1,53 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user profile in the Apex Girls system.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "total_xp": { "type": "number" },
+        "tokens": { "type": "number" },
+        "purchase_history": { "type": "array" },
+        "lottery": { "type": "object" },
+        "last_message_content": { "type": "string" },
+        "onboarded": { "type": "boolean" },
+        "joinedAt": { "type": "number" },
+        "game_uid": { "type": "string" },
+        "isDiscordVerified": { "type": "boolean" },
+        "discord_avatar": { "type": "string" },
+        "discord_banner": { "type": "string" },
+        "discord_username": { "type": "string" },
+        "discord_id": { "type": "string" },
+        "avatar_preference": { "type": "string" }
+      },
+      "required": ["id", "xp", "level", "total_xp", "tokens"]
+    },
+    "LotteryHistory": {
+      "title": "Lottery History",
+      "description": "Historical records of past lottery results.",
+      "type": "object",
+      "properties": {
+        "month": { "type": "string" },
+        "winners": { "type": "array" },
+        "totalTickets": { "type": "number" },
+        "totalParticipants": { "type": "number" }
+      },
+      "required": ["month", "winners"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles and stats."
+    },
+    "/lottery_history/{monthId}": {
+      "schema": { "$ref": "#/entities/LotteryHistory" },
+      "description": "Stores past lottery results."
+    }
+  }
+}

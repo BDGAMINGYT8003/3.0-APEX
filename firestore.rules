@@ -1,0 +1,134 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (matches auth.uid)
+    // Fields:
+    //   - id: string (required) - User ID
+    //   - displayName: string (optional) - User Name
+    //   - photoURL: string (optional) - User Avatar
+    //   - xp: number (required) - Current XP
+    //   - level: number (required) - Current Level
+    //   - total_xp: number (required) - Total XP for leaderboard
+    //   - tokens: number (required) - CI Tokens
+    //   - purchase_history: list (optional) - Items bought
+    //   - lottery: map (optional) - Lottery stats
+    //   - onboarded: boolean (optional)
+    //   - joinedAt: number (optional)
+    //   - game_uid: string (optional)
+    //   - isDiscordVerified: boolean (optional)
+    //   - discord_avatar: string (optional)
+    //   - discord_banner: string (optional)
+    //   - discord_username: string (optional)
+    //   - discord_id: string (optional)
+    //   - avatar_preference: string (optional)
+    //   - role: string (optional) - 'admin' or 'user'
+    //
+    // Collection: lottery_history
+    // Document ID: monthId
+    // Fields:
+    //   - month: string (required)
+    //   - winners: list (required)
+    //   - totalTickets: number (optional)
+    //   - totalParticipants: number (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin') ||
+          (request.auth.token.email == "xdjameherobrine@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function uidUnchanged() {
+      return !('id' in request.resource.data) || request.resource.data.id == resource.data.get('id', '');
+    }
+
+    function roleUnchanged() {
+      return !('role' in request.resource.data) || request.resource.data.role == resource.data.get('role', 'user');
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser() {
+      let data = request.resource.data;
+      return hasRequiredFields(['id', 'xp', 'level', 'total_xp', 'tokens']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 128 &&
+             data.xp is number && data.xp >= 0 &&
+             data.level is number && data.level >= 1 &&
+             data.total_xp is number && data.total_xp >= 0 &&
+             data.tokens is number && data.tokens >= 0 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 1000)) &&
+             (!('role' in data) || data.role in ['admin', 'user']);
+    }
+
+    function isValidLotteryHistory() {
+      let data = request.resource.data;
+      return hasRequiredFields(['month', 'winners']) &&
+             data.month is string && data.month.size() > 0 &&
+             data.winners is list;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Allow read for leaderboard (public profiles)
+      // Note: If users collection contains PII, we should split it.
+      // Assuming basic profile info is public for the leaderboard.
+      allow read: if isAuthenticated();
+      
+      // Allow create if owner and valid, role must be 'user' unless admin
+      allow create: if isOwner(userId) && isValidUser() && 
+                    (request.resource.data.get('role', 'user') == 'user' || isAdmin());
+      
+      // Allow update if owner and valid, role must be unchanged unless admin
+      allow update: if (isOwner(userId) && isValidUser() && uidUnchanged() && (roleUnchanged() || isAdmin())) || isAdmin();
+    }
+
+    match /lottery_history/{monthId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidLotteryHistory();
+    }
+
+    match /verification_codes/{codeId} {
+      allow read: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
