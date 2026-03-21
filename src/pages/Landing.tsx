@@ -3,10 +3,10 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { motion } from 'motion/react';
-import { Shield, Zap, Trophy } from 'lucide-react';
+import { Shield, Zap, Trophy, AlertCircle } from 'lucide-react';
 
 export function Landing() {
-  const { user, profile, signIn, loading } = useAuth();
+  const { user, profile, signIn, loading, error } = useAuth();
 
   if (loading) {
     return (
@@ -52,6 +52,16 @@ export function Landing() {
                 <h1 className="text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-6xl lg:text-7xl">
                   Dominate the <span className="text-[#E91E63]">Apex Grid</span>
                 </h1>
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3 text-red-500"
+                  >
+                    <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+                    <p className="text-sm font-medium">{error}</p>
+                  </motion.div>
+                )}
                 <p className="mt-6 text-lg leading-8 text-slate-600 dark:text-slate-400">
                   Connect your Discord profile, track your stats, purchase exclusive items in the market, and climb the monthly leaderboards.
                 </p>

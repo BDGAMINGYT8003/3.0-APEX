@@ -4,7 +4,7 @@ import { useAuth, handleFirestoreError, OperationType } from '../contexts/AuthCo
 import { Button } from '../components/ui/Button';
 import { motion } from 'motion/react';
 import { Shield, KeyRound, AlertCircle } from 'lucide-react';
-import { doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export function Verify() {
@@ -89,6 +89,21 @@ export function Verify() {
 
       // 3. Link the Discord account to the user's profile
       if (user) {
+        const discordId = codeData.discord_id;
+
+        // Check if this Discord account is already linked to another ACTIVE Google account
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('discord_id', '==', discordId));
+        const querySnap = await getDocs(q);
+
+        if (!querySnap.empty) {
+          // Found a user with this Discord ID. Check if it's the current user.
+          const existingUserDoc = querySnap.docs[0];
+          if (existingUserDoc.id !== user.uid) {
+            throw new Error('This Discord account is already linked to another active Google account.');
+          }
+        }
+
         const userRef = doc(db, 'users', user.uid);
         try {
           await updateDoc(userRef, {

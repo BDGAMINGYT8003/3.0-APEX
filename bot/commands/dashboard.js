@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { db, admin } = require('../lib/firebase');
+const { db, admin } = require('../lib/firebase.cjs');
 const crypto = require('crypto');
 const { COLORS } = require('../utils/constants');
 

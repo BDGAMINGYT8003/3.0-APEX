@@ -37,6 +37,12 @@ service cloud.firestore {
     //   - totalTickets: number (optional)
     //   - totalParticipants: number (optional)
     //
+    // Collection: deleted_accounts
+    // Document ID: email
+    // Fields:
+    //   - deletedAt: string (ISO date)
+    //   - email: string
+    //
     // ===============================================================
 
     // ===============================================================
@@ -124,6 +130,10 @@ service cloud.firestore {
     match /verification_codes/{codeId} {
       allow read: if isAuthenticated();
       allow delete: if isAuthenticated();
+    }
+
+    match /deleted_accounts/{email} {
+      allow read, delete: if isAuthenticated() && request.auth.token.email == email;
     }
 
     // Default deny

@@ -1,50 +1,60 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { useAuth, handleFirestoreError, OperationType } from '../contexts/AuthContext';
+import { useAuth, handleFirestoreError, OperationType, UserProfile } from '../contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { getXpForNextLevel } from '../lib/constants';
 import { motion } from 'motion/react';
 import { Trophy, Medal, Crown } from 'lucide-react';
 
-interface LeaderboardUser {
-  id: string;
-  displayName: string;
-  photoURL: string;
-  level: number;
-  xp: number;
-  total_xp: number;
-}
+interface LeaderboardUser extends UserProfile {}
 
 export function Leaderboard() {
   const [users, setUsers] = useState<LeaderboardUser[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchLeaderboard = async () => {
-      try {
-        const q = query(collection(db, 'users'), orderBy('total_xp', 'desc'), limit(50));
-        let querySnapshot;
-        try {
-          querySnapshot = await getDocs(q);
-        } catch (e) {
-          handleFirestoreError(e, OperationType.LIST, 'users');
-          return;
-        }
-        const fetchedUsers: LeaderboardUser[] = [];
-        querySnapshot.forEach((doc) => {
-          fetchedUsers.push(doc.data() as LeaderboardUser);
-        });
-        setUsers(fetchedUsers);
-      } catch (error) {
-        console.error("Error fetching leaderboard", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const q = query(collection(db, 'users'), orderBy('level', 'desc'), limit(50));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedUsers: LeaderboardUser[] = [];
+      snapshot.forEach((doc) => {
+        fetchedUsers.push(doc.data() as LeaderboardUser);
+      });
 
-    fetchLeaderboard();
+      // Primary sort: Level (desc), XP (desc)
+      // Secondary sort: Username (asc)
+      fetchedUsers.sort((a, b) => {
+        const levelA = a.level || 1;
+        const levelB = b.level || 1;
+        const xpA = a.xp || 0;
+        const xpB = b.xp || 0;
+
+        if (levelB !== levelA) {
+          return levelB - levelA;
+        }
+        if (xpB !== xpA) {
+          return xpB - xpA;
+        }
+        return (a.displayName || '').localeCompare(b.displayName || '');
+      });
+
+      setUsers(fetchedUsers);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  const getAvatarUrl = (user: LeaderboardUser) => {
+    if (user.avatar_preference === 'discord' && user.discord_avatar) {
+      return user.discord_avatar;
+    }
+    return user.photoURL || 'https://picsum.photos/seed/avatar/100/100';
+  };
 
   if (loading) {
     return (
@@ -102,9 +112,9 @@ export function Leaderboard() {
                   
                   <div className="ml-4 flex items-center space-x-4 flex-1">
                     <img
-                      src={user.photoURL || 'https://picsum.photos/seed/avatar/100/100'}
+                      src={getAvatarUrl(user)}
                       alt={user.displayName}
-                      className="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700"
+                      className="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700 object-cover"
                       referrerPolicy="no-referrer"
                     />
                     <div>
@@ -112,9 +122,7 @@ export function Leaderboard() {
                         {user.displayName}
                       </h4>
                       <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span>Lvl {user.level}</span>
-                        <span>•</span>
-                        <span>{user.total_xp.toLocaleString()} Total XP</span>
+                        <span>Lvl {user.level} • {user.xp.toLocaleString()} XP</span>
                       </div>
                     </div>
                   </div>

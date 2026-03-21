@@ -11,7 +11,7 @@ import { ShoppingCart, AlertCircle, UserX, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function Market() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const navigate = useNavigate();
   const [selectedItem, setSelectedItem] = useState<typeof MARKET_ITEMS[0] | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -32,7 +32,7 @@ export function Market() {
   };
 
   const handlePurchase = async () => {
-    if (!selectedItem || !profile) return;
+    if (!selectedItem || !profile || !user) return;
     
     if (!profile.game_uid) {
       setShowUidModal(true);
@@ -44,42 +44,22 @@ export function Market() {
     setError('');
 
     try {
-      const totalCost = selectedItem.cost * quantity;
-      if (profile.tokens < totalCost) {
-        throw new Error('Insufficient CI Tokens.');
-      }
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/market/purchase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          itemId: selectedItem.id,
+          quantity
+        })
+      });
 
-      const isLottery = selectedItem.id === 'lottery_ticket';
-      const userRef = doc(db, 'users', profile.id);
-      
-      const purchaseRecord = {
-        id: crypto.randomUUID(),
-        itemName: selectedItem.name,
-        amount: quantity,
-        tokensUsed: totalCost,
-        timestamp: new Date().toISOString()
-      };
-
-      if (isLottery) {
-        try {
-          await updateDoc(userRef, {
-            tokens: profile.tokens - totalCost,
-            'lottery.current_tickets': (profile.lottery?.current_tickets || 0) + quantity,
-            'lottery.lifetime_tickets': (profile.lottery?.lifetime_tickets || 0) + quantity,
-            purchase_history: arrayUnion(purchaseRecord)
-          });
-        } catch (e) {
-          handleFirestoreError(e, OperationType.UPDATE, `users/${profile.id}`);
-        }
-      } else {
-        try {
-          await updateDoc(userRef, {
-            tokens: profile.tokens - totalCost,
-            purchase_history: arrayUnion(purchaseRecord)
-          });
-        } catch (e) {
-          handleFirestoreError(e, OperationType.UPDATE, `users/${profile.id}`);
-        }
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Purchase failed.');
       }
 
       setSelectedItem(null);
@@ -106,13 +86,8 @@ export function Market() {
         {MARKET_ITEMS.map((item, i) => {
           const isLottery = item.id === 'lottery_ticket';
           const isLocked = profile.level < item.minLevel;
-          // Since inventory is gone, we don't track stock per user anymore in the same way
-          // But we can still have a global stock or just allow unlimited if it's sent to mailbox
-          // The user said "market stocks and inventory reset monthly", so maybe there's still a limit
-          // For now, I'll keep the UI showing stock but it won't block based on local 'bought' count
-          // unless we fetch it from purchase_history. 
-          // Actually, the user said "remove all dead 'Inventory'-related code".
-          // I'll assume stock is unlimited for now or just visual.
+          const bought = profile.market_stock?.[item.id] || 0;
+          const remaining = item.maxStock - bought;
           
           return (
             <motion.div
@@ -151,17 +126,17 @@ export function Market() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-slate-500 dark:text-slate-400">Stock</span>
                       <span className="font-medium text-slate-900 dark:text-white">
-                        {isLottery ? '∞' : 'Monthly Reset'}
+                        {isLottery ? '∞' : `${remaining}/${item.maxStock}`}
                       </span>
                     </div>
                   </div>
                   <Button
                     className="mt-6 w-full"
-                    disabled={isLocked}
+                    disabled={isLocked || (!isLottery && remaining <= 0)}
                     onClick={() => handlePurchaseClick(item)}
                   >
                     <ShoppingCart className="mr-2 h-4 w-4" />
-                    Purchase
+                    {isLocked ? 'Locked' : (!isLottery && remaining <= 0) ? 'Out of Stock' : 'Purchase'}
                   </Button>
                 </CardContent>
               </Card>
@@ -225,18 +200,50 @@ export function Market() {
                   variant="secondary"
                   size="sm"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  disabled={quantity <= 1}
                 >
                   -
                 </Button>
-                <span className="w-12 text-center font-bold text-lg dark:text-white">{quantity}</span>
+                <div className="relative flex-1 max-w-[100px]">
+                  <input
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      const isLottery = selectedItem.id === 'lottery_ticket';
+                      const bought = profile.market_stock?.[selectedItem.id] || 0;
+                      const remaining = isLottery ? 9999 : selectedItem.maxStock - bought;
+                      
+                      if (isNaN(val)) setQuantity(1);
+                      else setQuantity(Math.min(remaining, Math.max(1, val)));
+                    }}
+                    className="w-full text-center font-bold text-lg bg-transparent border-b-2 border-slate-200 focus:border-[#E91E63] outline-none dark:text-white dark:border-slate-700"
+                  />
+                </div>
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => {
+                    const isLottery = selectedItem.id === 'lottery_ticket';
+                    const bought = profile.market_stock?.[selectedItem.id] || 0;
+                    const remaining = isLottery ? 9999 : selectedItem.maxStock - bought;
+                    if (quantity < remaining) setQuantity(quantity + 1);
+                  }}
+                  disabled={(() => {
+                    const isLottery = selectedItem.id === 'lottery_ticket';
+                    const bought = profile.market_stock?.[selectedItem.id] || 0;
+                    const remaining = isLottery ? 9999 : selectedItem.maxStock - bought;
+                    return quantity >= remaining;
+                  })()}
                 >
                   +
                 </Button>
               </div>
+              {! (selectedItem.id === 'lottery_ticket') && (
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Remaining stock: {selectedItem.maxStock - (profile.market_stock?.[selectedItem.id] || 0)}
+                </p>
+              )}
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">

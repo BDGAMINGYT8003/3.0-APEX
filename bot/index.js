@@ -4,6 +4,13 @@ const { Client, Collection, GatewayIntentBits, REST, Routes } = require('discord
 const logger = require('./utils/logger');
 require('dotenv').config();
 
+if (!process.env.BOT_TOKEN || !process.env.CLIENT_ID) {
+  logger.warn('BOT_TOKEN or CLIENT_ID is missing. The Discord bot will not start.');
+  logger.warn('Please add these variables to your AI Studio Secrets to enable the bot.');
+  // We don't exit with an error code so concurrently doesn't kill the web server
+  process.exit(0);
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,

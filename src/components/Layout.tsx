@@ -3,13 +3,16 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ThemeToggle } from './ThemeToggle';
 import { motion, AnimatePresence } from 'motion/react';
-import { LayoutDashboard, ShoppingCart, Trophy, Ticket, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Trophy, Ticket, LogOut, Menu, X, Shield, Search, ChevronDown } from 'lucide-react';
 
 export function Layout() {
-  const { profile, signOut } = useAuth();
+  const { user, profile, signOut, isOnline } = useAuth();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isAdminMenuOpen, setIsAdminMenuOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = user?.email === 'xdjameherobrine@gmail.com';
 
   useEffect(() => {
     if (scrollAreaRef.current) {
@@ -61,6 +64,58 @@ export function Layout() {
                 </Link>
               );
             })}
+
+            {isAdmin && (
+              <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/50">
+                <button
+                  onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+                  className={`group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                    isAdminMenuOpen || location.pathname.startsWith('/admin')
+                      ? 'text-[#E91E63]'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center">
+                    <Shield className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                      isAdminMenuOpen || location.pathname.startsWith('/admin') ? 'text-[#E91E63]' : 'text-slate-400 dark:text-slate-500'
+                    }`} />
+                    Administrator
+                  </div>
+                  <motion.div
+                    animate={{ rotate: isAdminMenuOpen ? 180 : 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <ChevronDown size={16} />
+                  </motion.div>
+                </button>
+                
+                <AnimatePresence>
+                  {isAdminMenuOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-1 ml-4 space-y-1 border-l-2 border-slate-100 dark:border-slate-800/50 pl-4">
+                        <Link
+                          to="/admin/search"
+                          className={`group flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+                            location.pathname === '/admin/search'
+                              ? 'text-[#E91E63]'
+                              : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+                          }`}
+                        >
+                          <Search className="mr-3 h-4 w-4" />
+                          Search
+                        </Link>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </nav>
         </div>
 
@@ -143,6 +198,59 @@ export function Layout() {
                       </Link>
                     );
                   })}
+
+                  {isAdmin && (
+                    <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/50">
+                      <button
+                        onClick={() => setIsAdminMenuOpen(!isAdminMenuOpen)}
+                        className={`group flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                          isAdminMenuOpen || location.pathname.startsWith('/admin')
+                            ? 'text-[#E91E63]'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <Shield className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                            isAdminMenuOpen || location.pathname.startsWith('/admin') ? 'text-[#E91E63]' : 'text-slate-400 dark:text-slate-500'
+                          }`} />
+                          Administrator
+                        </div>
+                        <motion.div
+                          animate={{ rotate: isAdminMenuOpen ? 180 : 0 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          <ChevronDown size={16} />
+                        </motion.div>
+                      </button>
+                      
+                      <AnimatePresence>
+                        {isAdminMenuOpen && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-1 ml-4 space-y-1 border-l-2 border-slate-100 dark:border-slate-800/50 pl-4">
+                              <Link
+                                to="/admin/search"
+                                onClick={() => setIsMobileMenuOpen(false)}
+                                className={`group flex items-center rounded-xl px-3 py-2 text-sm font-medium transition-all ${
+                                  location.pathname === '/admin/search'
+                                    ? 'text-[#E91E63]'
+                                    : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100'
+                                }`}
+                              >
+                                <Search className="mr-3 h-4 w-4" />
+                                Search
+                              </Link>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  )}
                 </nav>
               </div>
               <div className="border-t border-slate-200 p-4 dark:border-slate-800/50">
@@ -182,6 +290,19 @@ export function Layout() {
 
       {/* Main Content */}
       <main className="flex flex-1 flex-col overflow-hidden">
+        <AnimatePresence>
+          {!isOnline && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="bg-red-500 text-white px-6 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 z-[60]"
+            >
+              <div className="h-2 w-2 rounded-full bg-white animate-pulse" />
+              Connection lost. Operating in offline mode.
+            </motion.div>
+          )}
+        </AnimatePresence>
         <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6 dark:border-slate-800/50 dark:bg-[#111111] md:justify-end">
           <div className="flex items-center md:hidden">
             <button

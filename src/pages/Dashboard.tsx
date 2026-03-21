@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { getXpForNextLevel } from '../lib/constants';
 import { motion } from 'motion/react';
 import { Trophy, Coins, Star, Activity } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export function Dashboard() {
   const { profile } = useAuth();
@@ -19,6 +20,16 @@ export function Dashboard() {
     { label: 'Total XP', value: profile.total_xp, icon: Activity, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { label: 'Lottery Tickets', value: profile.lottery?.current_tickets || 0, icon: Trophy, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
   ];
+
+  const formatTimestamp = (timestamp: string | number) => {
+    const date = new Date(timestamp);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} · ${hours}:${minutes}`;
+  };
 
   return (
     <div className="space-y-8">
@@ -80,32 +91,53 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Recent Activity</CardTitle>
+            {profile.activity_log && profile.activity_log.length > 5 && (
+              <Link 
+                to="/recent-activity" 
+                className="text-sm font-medium text-violet-600 dark:text-violet-400 underline hover:opacity-80 transition-opacity"
+              >
+                View All
+              </Link>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {profile.last_message_content ? (
-                <div className="flex items-start space-x-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
-                  <div className="flex-1">
-                    <p className="text-sm text-slate-900 dark:text-slate-100 italic">
-                      "{profile.last_message_content}"
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      Last recorded message in Discord
-                    </p>
+            {profile.activity_log && profile.activity_log.length > 0 ? (
+              <div className="space-y-3">
+                {profile.activity_log.slice(-5).reverse().map((activity) => (
+                  <div key={activity.id} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0 dark:border-slate-800">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-900 dark:text-white capitalize">
+                        {activity.reason.startsWith('Granted by') ? 'Granted by Admin' : activity.reason}
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        {formatTimestamp(activity.timestamp)}
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-emerald-500">
+                      +{activity.amount} CI
+                    </span>
                   </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 dark:text-slate-400">No recent activity recorded.</p>
-              )}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500 dark:text-slate-400">No recent activity recorded.</p>
+            )}
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Purchase History</CardTitle>
+            {profile.purchase_history && profile.purchase_history.length > 5 && (
+              <Link 
+                to="/purchase-history" 
+                className="text-sm font-medium text-violet-600 dark:text-violet-400 underline hover:opacity-80 transition-opacity"
+              >
+                View All
+              </Link>
+            )}
           </CardHeader>
           <CardContent>
             {profile.purchase_history && profile.purchase_history.length > 0 ? (

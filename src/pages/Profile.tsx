@@ -5,7 +5,7 @@ import { Shield, Calendar, Save, CheckCircle, AlertTriangle, Edit2, X, Check, Us
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 
 export function Profile() {
   const { user, profile } = useAuth();
@@ -59,6 +59,40 @@ export function Profile() {
       handleFirestoreError(error, OperationType.UPDATE, `users/${profile.id}`);
     } finally {
       setIsSavingUid(false);
+    }
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'delete') return;
+    
+    setIsDeleting(true);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      const response = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete account.');
+      }
+
+      // Deletion successful - Firebase Auth will automatically sign out
+      // but we should redirect or show a final message
+      window.location.href = '/';
+    } catch (error: any) {
+      console.error('Account deletion error:', error);
+      alert(error.message || 'An error occurred during account deletion.');
+      setIsDeleting(false);
     }
   };
 
@@ -424,6 +458,132 @@ export function Profile() {
               <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
                 Your selection will be updated across the entire platform instantly.
               </p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Danger Zone */}
+      <div className="mt-8 pt-8 border-t border-red-500/20">
+        <h3 className="text-lg font-semibold text-red-500 mb-4 flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5" />
+          Danger Zone
+        </h3>
+        <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h4 className="text-white font-medium mb-1">Delete Account</h4>
+              <p className="text-gray-400 text-sm">
+                Permanently delete your account and all associated data. This action cannot be undone.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="px-6 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500 rounded-lg transition-all duration-200 font-medium"
+            >
+              Delete Account
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Account Modal */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!isDeleting) setShowDeleteModal(false);
+              }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-zinc-900 border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="flex items-center gap-3 text-red-500 mb-6">
+                <div className="p-3 bg-red-500/10 rounded-xl">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <h2 className="text-2xl font-bold">Delete Account?</h2>
+              </div>
+
+              <div className="space-y-4 mb-8">
+                <p className="text-gray-300">
+                  This action is <span className="text-red-500 font-bold">permanent</span> and will completely wipe:
+                </p>
+                <ul className="list-disc list-inside text-gray-400 space-y-1 text-sm">
+                  <li>Your Google account profile and progress</li>
+                  <li>Linked Discord account data and XP</li>
+                  <li>All market purchases and inventory</li>
+                  <li>Your position on the leaderboard</li>
+                </ul>
+                <p className="text-gray-400 text-sm italic">
+                  Note: You will be locked from re-registering with this email until the end of next month.
+                </p>
+              </div>
+
+              {!showDeleteConfirm ? (
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-colors"
+                  >
+                    I understand, continue
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteModal(false)}
+                    className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-400">
+                    To finalize, please type <span className="text-white font-mono font-bold">delete</span> below:
+                  </p>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="Type 'delete' here"
+                    className="w-full bg-black/50 border border-red-500/30 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 focus:outline-none focus:border-red-500 transition-colors"
+                    disabled={isDeleting}
+                  />
+                  <div className="flex flex-col gap-3">
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteConfirmText !== 'delete' || isDeleting}
+                      className="w-full py-3 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Deleting...
+                        </>
+                      ) : (
+                        'Permanently Delete My Account'
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setDeleteConfirmText('');
+                      }}
+                      disabled={isDeleting}
+                      className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-colors"
+                    >
+                      Back
+                    </button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </div>
         )}

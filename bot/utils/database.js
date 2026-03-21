@@ -1,4 +1,4 @@
-const { db, admin } = require('../lib/firebase');
+const { db, admin } = require('../lib/firebase.cjs');
 
 const USERS_COLLECTION = 'users';
 const INCOMPLETE_USERS_COLLECTION = 'incomplete_users';
@@ -224,6 +224,50 @@ const database = {
       return false;
     } catch (error) {
       console.error(`Error migrating user ${userId}:`, error);
+      return false;
+    }
+  },
+
+  async addActivityLog(userId, activityData) {
+    try {
+      const activityRecord = {
+        id: Math.random().toString(36).substring(2, 15),
+        ...activityData,
+        timestamp: new Date().toISOString()
+      };
+
+      // Check if a verified web account exists
+      const querySnapshot = await db.collection(USERS_COLLECTION)
+        .where('discord_id', '==', userId)
+        .where('isDiscordVerified', '==', true)
+        .limit(1)
+        .get();
+
+      if (!querySnapshot.empty) {
+        await querySnapshot.docs[0].ref.update({
+          activity_log: admin.firestore.FieldValue.arrayUnion(activityRecord)
+        });
+        return true;
+      }
+
+      // Update legacy document
+      const userRef = db.collection(USERS_COLLECTION).doc(userId);
+      const userDoc = await userRef.get();
+      if (userDoc.exists) {
+        await userRef.update({
+          activity_log: admin.firestore.FieldValue.arrayUnion(activityRecord)
+        });
+      } else {
+        await userRef.set({
+          discord_id: userId,
+          activity_log: [activityRecord],
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      return true;
+    } catch (error) {
+      console.error(`Error adding activity log for user ${userId}:`, error);
       return false;
     }
   }

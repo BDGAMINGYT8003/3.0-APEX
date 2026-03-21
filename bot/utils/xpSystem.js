@@ -1,5 +1,5 @@
 const db = require('./database');
-const { LEVEL_CONSTANTS } = require('./constants');
+const { LEVEL_CONSTANTS, TOKEN_REWARDS } = require('./constants');
 
 const xpSystem = {
   async processMessage(userId, guildId) {
@@ -14,26 +14,32 @@ const xpSystem = {
       if (now - lastMessage < cooldown) return;
 
       const xpGain = Math.floor(Math.random() * 10) + 10; // 10-20 XP
-      const newXp = (user.xp || 0) + xpGain;
+      let newXp = (user.xp || 0) + xpGain;
       const currentLevel = user.level || 1;
-      const nextLevelXp = Math.floor(LEVEL_CONSTANTS.BASE_XP * Math.pow(LEVEL_CONSTANTS.XP_MULTIPLIER, currentLevel - 1));
+      const nextLevelXp = LEVEL_CONSTANTS.BASE + (currentLevel - 1) * LEVEL_CONSTANTS.INCREMENT;
 
       let newLevel = currentLevel;
       let tokensGain = 0;
 
       if (newXp >= nextLevelXp) {
+        newXp -= nextLevelXp;
         newLevel++;
-        tokensGain = newLevel * 10; // 10 tokens per level
+        tokensGain = newLevel * (TOKEN_REWARDS ? TOKEN_REWARDS.BASE : 10);
       }
 
       await db.updateUser(userId, {
         xp: newXp,
         level: newLevel,
+        total_xp: (user.total_xp || 0) + xpGain,
         tokens: (user.tokens || 0) + tokensGain,
         lastMessage: now
       });
 
       if (newLevel > currentLevel) {
+        await db.addActivityLog(userId, {
+          reason: 'Level Up Reward',
+          amount: tokensGain
+        });
         return { leveledUp: true, newLevel, tokensGain };
       }
 

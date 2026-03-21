@@ -18,6 +18,10 @@ const scheduler = {
             xp: 0,
             level: 1
           });
+          await db.addActivityLog(userId, {
+            reason: 'Monthly Payout Reward',
+            amount: tokensGain
+          });
           logger.info(`Reset user ${userId} and paid out ${tokensGain} tokens.`);
         }
         logger.success('Monthly reset completed.');

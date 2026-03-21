@@ -11,6 +11,9 @@ import { Leaderboard } from './pages/Leaderboard';
 import { Lottery } from './pages/Lottery';
 import { Verify } from './pages/Verify';
 import { Profile } from './pages/Profile';
+import { RecentActivity } from './pages/RecentActivity';
+import { PurchaseHistory } from './pages/PurchaseHistory';
+import AdminSearch from './pages/AdminSearch';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -58,6 +61,12 @@ export default function App() {
                 <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/lottery" element={<Lottery />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/recent-activity" element={<RecentActivity />} />
+                <Route path="/purchase-history" element={<PurchaseHistory />} />
+                <Route path="/admin/search" element={<AdminSearch />} />
+                <Route path="/admin/search/:userId" element={<AdminSearch />} />
+                <Route path="/admin/activity/:userId" element={<RecentActivity />} />
+                <Route path="/admin/purchases/:userId" element={<PurchaseHistory />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

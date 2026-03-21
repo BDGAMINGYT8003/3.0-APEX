@@ -32,7 +32,11 @@ export class ErrorBoundary extends React.Component<Props, State> {
         // Try to parse if it's our custom Firestore error JSON
         const parsedError = JSON.parse(this.state.error?.message || '');
         if (parsedError.error && parsedError.operationType) {
-          errorMessage = `Firestore ${parsedError.operationType} error: ${parsedError.error}`;
+          if (parsedError.error.toLowerCase().includes('unavailable') || parsedError.error.toLowerCase().includes('offline')) {
+            errorMessage = 'Cloud Firestore is currently unreachable. This typically indicates a connection issue. The app will continue to work in offline mode.';
+          } else {
+            errorMessage = `Firestore ${parsedError.operationType} error: ${parsedError.error}`;
+          }
         }
       } catch (e) {
         // Not a JSON error, use the message directly if it's simple

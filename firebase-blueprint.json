@@ -7,12 +7,14 @@
       "properties": {
         "id": { "type": "string" },
         "displayName": { "type": "string" },
+        "email": { "type": "string" },
         "photoURL": { "type": "string" },
         "xp": { "type": "number" },
         "level": { "type": "number" },
         "total_xp": { "type": "number" },
         "tokens": { "type": "number" },
         "purchase_history": { "type": "array" },
+        "activity_log": { "type": "array" },
         "lottery": { "type": "object" },
         "last_message_content": { "type": "string" },
         "onboarded": { "type": "boolean" },
@@ -23,7 +25,11 @@
         "discord_banner": { "type": "string" },
         "discord_username": { "type": "string" },
         "discord_id": { "type": "string" },
-        "avatar_preference": { "type": "string" }
+        "avatar_preference": { "type": "string" },
+        "isBanned": { "type": "boolean" },
+        "banReason": { "type": "string" },
+        "bannedAt": { "type": "string" },
+        "bannedBy": { "type": "string" }
       },
       "required": ["id", "xp", "level", "total_xp", "tokens"]
     },
@@ -38,6 +44,16 @@
         "totalParticipants": { "type": "number" }
       },
       "required": ["month", "winners"]
+    },
+    "DeletedAccount": {
+      "title": "Deleted Account",
+      "description": "Record of a deleted account to enforce re-registration lock.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "deletedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "deletedAt"]
     }
   },
   "firestore": {
@@ -48,6 +64,10 @@
     "/lottery_history/{monthId}": {
       "schema": { "$ref": "#/entities/LotteryHistory" },
       "description": "Stores past lottery results."
+    },
+    "/deleted_accounts/{email}": {
+      "schema": { "$ref": "#/entities/DeletedAccount" },
+      "description": "Stores records of deleted accounts for re-registration lock."
     }
   }
 }

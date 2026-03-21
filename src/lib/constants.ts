@@ -30,5 +30,5 @@ export const TOKEN_REWARDS = {
 };
 
 export function getXpForNextLevel(currentLevel: number) {
-  return LEVEL_CONSTANTS.BASE + (currentLevel - 1);
+  return LEVEL_CONSTANTS.BASE + (currentLevel - 1) * LEVEL_CONSTANTS.INCREMENT;
 }

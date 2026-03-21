@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc, onSnapshot, getDocFromServer } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, getDocFromServer, deleteDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../lib/firebase';
 
 export enum OperationType {
@@ -57,16 +57,24 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 export interface UserProfile {
   id: string;
   displayName: string;
+  email: string;
   photoURL: string;
   xp: number;
   level: number;
   total_xp: number;
   tokens: number;
+  market_stock?: { [itemId: string]: number };
   purchase_history: {
     id: string;
     itemName: string;
     amount: number;
     tokensUsed: number;
+    timestamp: number;
+  }[];
+  activity_log?: {
+    id: string;
+    reason: string;
+    amount: number;
     timestamp: number;
   }[];
   lottery: {
@@ -91,6 +99,8 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  error: string | null;
+  isOnline: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -101,6 +111,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     async function testConnection() {
@@ -118,8 +143,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      setError(null);
       
       if (firebaseUser) {
+        // Check for re-registration lock
+        if (firebaseUser.email) {
+          try {
+            const deletedRef = doc(db, 'deleted_accounts', firebaseUser.email);
+            const deletedDoc = await getDoc(deletedRef);
+            
+            if (deletedDoc.exists()) {
+              const deletedData = deletedDoc.data();
+              const deletedAt = deletedData.deletedAt;
+              const now = new Date();
+              const deletionDate = new Date(deletedAt);
+              
+              // Lock until end of next month
+              const lockUntil = new Date(deletionDate.getFullYear(), deletionDate.getMonth() + 2, 0);
+              
+              if (now < lockUntil) {
+                await auth.signOut();
+                setError(`This email is currently locked due to a recent account deletion. You can re-register after ${lockUntil.toLocaleDateString()}.`);
+                setLoading(false);
+                return;
+              } else {
+                // Lock expired, clean up
+                await deleteDoc(deletedRef);
+              }
+            }
+          } catch (e) {
+            console.error('Error checking deleted accounts:', e);
+          }
+        }
+
         const userRef = doc(db, 'users', firebaseUser.uid);
         
         // Initial check to create profile if it doesn't exist
@@ -129,11 +185,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const newProfile: UserProfile = {
               id: firebaseUser.uid,
               displayName: firebaseUser.displayName || 'Agent',
+              email: firebaseUser.email || '',
               photoURL: firebaseUser.photoURL || '',
               xp: 0,
               level: 1,
               total_xp: 0,
               tokens: 0,
+              market_stock: {},
               purchase_history: [],
               lottery: {
                 current_tickets: 0,
@@ -147,6 +205,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               isDiscordVerified: false
             };
             await setDoc(userRef, newProfile);
+          } else {
+            // Update email if missing
+            const data = docSnap.data();
+            if (!data.email && firebaseUser.email) {
+              await setDoc(userRef, { email: firebaseUser.email }, { merge: true });
+            }
           }
         } catch (e) {
           handleFirestoreError(e, OperationType.WRITE, `users/${firebaseUser.uid}`);
@@ -197,7 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, error, isOnline, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
