@@ -180,6 +180,20 @@ const database = {
     }
   },
 
+  async getAllIncompleteUsers() {
+    try {
+      const querySnapshot = await db.collection(INCOMPLETE_USERS_COLLECTION).get();
+      const users = {};
+      querySnapshot.forEach((doc) => {
+        users[doc.id] = doc.data();
+      });
+      return users;
+    } catch (error) {
+      console.error('Error getting all incomplete users:', error);
+      return {};
+    }
+  },
+
   // --- Guild Settings ---
   async getGuildSettings(guildId) {
     try {

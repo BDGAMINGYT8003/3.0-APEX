@@ -10,6 +10,6 @@ module.exports = {
     client.user.setActivity('the web dashboard', { type: ActivityType.Watching });
 
     // Start the scheduler for monthly resets and payouts
-    scheduler.start();
+    scheduler.init(client);
   }
 };

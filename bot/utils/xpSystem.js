@@ -1,49 +1,128 @@
 const db = require('./database');
 const { LEVEL_CONSTANTS, TOKEN_REWARDS } = require('./constants');
+const logger = require('./logger');
+
+// In-memory cooldowns: Map<userId, timestamp>
+const cooldowns = new Map();
+
+/**
+ * Calculates XP required for the NEXT level.
+ * Formula: 100 + (CurrentLevel - 1)
+ * @param {number} currentLevel
+ * @returns {number} XP cost
+ */
+function getXpForNextLevel(currentLevel) {
+    return LEVEL_CONSTANTS.BASE + (currentLevel - 1);
+}
+
+/**
+ * Calculates CI Tokens awarded for reaching a specific level.
+ * Formula: 10 + (NewLevel - 2)
+ * @param {number} level The level JUST reached.
+ * @returns {number} Tokens to award.
+ */
+function getTokenReward(level) {
+    // Level 2 (First level up) = 10 CI
+    // Level 3 = 11 CI
+    // Formula: 10 + (level - 2)
+    return TOKEN_REWARDS.BASE + (level - 2);
+}
 
 const xpSystem = {
-  async processMessage(userId, guildId) {
+  getXpForNextLevel,
+  getTokenReward,
+  async processMessage(userId, guildId, content) {
     try {
-      const user = await db.getUser(userId);
-      if (!user) return;
+      // 1. Determine User Status (Complete vs Incomplete)
+      let user = await db.getUser(userId);
+      let isComplete = true;
 
+      if (!user) {
+        user = await db.getIncompleteUser(userId);
+        isComplete = false;
+
+        // If not even in incomplete, create it (Silent Reward System)
+        if (!user) {
+          await db.createIncompleteUser(userId, { discord_id: userId, xp: 0, level: 1, total_xp: 0, tokens: 0 });
+          user = await db.getIncompleteUser(userId);
+        }
+      }
+
+      // 2. Length Check
+      if (!content || content.length < 7) return null;
+
+      // 3. Entropy Check
+      if (user.last_message_content === content) return null;
+
+      // 4. Cooldown Check
       const now = Date.now();
-      const lastMessage = user.lastMessage || 0;
-      const cooldown = 60000; // 1 minute cooldown
+      const lastXpTime = cooldowns.get(userId) || 0;
+      if (now - lastXpTime < 60000) return null;
 
-      if (now - lastMessage < cooldown) return;
+      // --- AWARD XP & TOKEN ---
+      const xpGained = Math.floor(Math.random() * (5 - 2 + 1)) + 2; // Random 2-5
 
-      const xpGain = Math.floor(Math.random() * 10) + 10; // 10-20 XP
-      let newXp = (user.xp || 0) + xpGain;
-      const currentLevel = user.level || 1;
-      const nextLevelXp = LEVEL_CONSTANTS.BASE + (currentLevel - 1) * LEVEL_CONSTANTS.INCREMENT;
+      // Update Cooldown
+      cooldowns.set(userId, now);
 
-      let newLevel = currentLevel;
-      let tokensGain = 0;
+      // Calculate Leveling
+      let currentLevel = user.level || 1;
+      const oldLevel = currentLevel;
+      let currentXp = (user.xp || 0) + xpGained;
+      let totalXp = (user.total_xp || 0) + xpGained;
+      let tokens = (user.tokens || 0) + 1; // +1 CI Token per valid message
+      let leveledUp = false;
+      let tokensAwarded = 0;
 
-      if (newXp >= nextLevelXp) {
-        newXp -= nextLevelXp;
-        newLevel++;
-        tokensGain = newLevel * (TOKEN_REWARDS ? TOKEN_REWARDS.BASE : 10);
+      // Check for level ups (loop in case massive XP - unlikely but safe)
+      let requiredXp = getXpForNextLevel(currentLevel);
+
+      while (currentXp >= requiredXp) {
+          currentXp -= requiredXp;
+          currentLevel++;
+          leveledUp = true;
+
+          // Award Tokens
+          const reward = getTokenReward(currentLevel);
+          tokens += reward;
+          tokensAwarded += reward;
+
+          // Update requirement for next loop
+          requiredXp = getXpForNextLevel(currentLevel);
       }
 
-      await db.updateUser(userId, {
-        xp: newXp,
-        level: newLevel,
-        total_xp: (user.total_xp || 0) + xpGain,
-        tokens: (user.tokens || 0) + tokensGain,
-        lastMessage: now
-      });
+      // Save to DB (Update appropriate cache)
+      const updateData = {
+          xp: currentXp,
+          total_xp: totalXp,
+          level: currentLevel,
+          tokens: tokens,
+          last_message_content: content
+      };
 
-      if (newLevel > currentLevel) {
-        await db.addActivityLog(userId, {
-          reason: 'Level Up Reward',
-          amount: tokensGain
-        });
-        return { leveledUp: true, newLevel, tokensGain };
+      if (isComplete) {
+          await db.updateUser(userId, updateData);
+      } else {
+          await db.updateIncompleteUser(userId, updateData);
       }
 
-      return { leveledUp: false };
+      if (leveledUp && isComplete) {
+          await db.addActivityLog(userId, {
+              reason: 'Level Up Reward',
+              amount: tokensAwarded
+          });
+      }
+
+      return {
+          notify: isComplete, // Only notify if user is fully onboarded
+          leveledUp,
+          xpGained,
+          currentXp,
+          oldLevel: leveledUp ? oldLevel : null,
+          newLevel: leveledUp ? currentLevel : null,
+          tokensAwarded,
+          tokensGain: tokensAwarded
+      };
     } catch (error) {
       console.error(`Error processing message for user ${userId}:`, error);
       return null;

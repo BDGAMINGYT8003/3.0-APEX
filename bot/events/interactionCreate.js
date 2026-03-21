@@ -1,9 +1,22 @@
 const { Events } = require('discord.js');
+const db = require('../utils/database');
+const onboarding = require('../utils/onboarding');
 
 module.exports = {
   name: Events.InteractionCreate,
   async execute(interaction) {
+    // Handle onboarding component interactions
+    if (interaction.isButton() && interaction.customId.startsWith('onboard_')) {
+      return await onboarding.handle(interaction);
+    }
+
     if (interaction.isChatInputCommand()) {
+      // Check if user is onboarded
+      const user = await db.getUser(interaction.user.id);
+      if (!user) {
+        return await onboarding.handle(interaction);
+      }
+
       const command = interaction.client.commands.get(interaction.commandName);
 
       if (!command) {
